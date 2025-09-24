@@ -1,0 +1,11 @@
+{
+  "TenantSlug": "corp",
+  "PostgrestUrl": "https://epo.example.com/rest",
+  "AuthUrl": "https://epo.example.com/auth",
+  "AgentId": "00000000-0000-0000-0000-000000000000",
+  "BootstrapToken": "paste-admin-issued-agent-bootstrap-token",
+  "PrivateKeyPath": "C:/ProgramData/EPO-Agent/agent-key.pem",
+  "RequireSignedScripts": true,
+  "MaxConcurrentTargets": 4,
+  "PollIntervalSeconds": 5
+}
