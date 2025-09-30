@@ -7,6 +7,7 @@ A hardened, multi-tenant orchestration platform for running PowerShell workloads
 ## 1) Architecture Overview
 
 **Components**
+
 - **PostgreSQL 17**: Authoritative store with row-level security (RLS), immutable auditing, and tenant scoping. All business logic exposed through `SECURITY DEFINER` functions rather than ad-hoc table writes.
 - **PostgREST**: Thin REST facade bound to database roles (`app_anon`, `app_user`, `app_admin`, `app_agent`). JWT claims drive both the DB role and application roles used inside the database.
 - **Auth Gateway (Node.js + Express)**: Handles Local + LDAP(S) authentication, Argon2id hashing, token refresh, and agent bootstrap flows. Issues JWTs (HS512) embedding `role`, `app_roles[]`, `tenant_id`, and optional `agent_id` claims.
@@ -14,6 +15,7 @@ A hardened, multi-tenant orchestration platform for running PowerShell workloads
 - **React Frontend (Vite + TS)**: Admin console for managing scripts, credentials, jobs, schedules, and run history. Talks only to PostgREST/Auth Gateway using short-lived tokens stored in memory.
 
 **Security Model**
+
 - **Tenant isolation**: Every row carries a `tenant_id`; RLS enforces tenant scoping for users and agents.
 - **Application RBAC**: JWTs include `app_roles` (admin/operator/auditor). Helper functions (`epo.user_has_role`) gate DML paths.
 - **Credential handling**: Secrets stored as RSA-OAEP ciphertext under an agent public key or as external vault references. No plaintext secrets or reversible hashes in the DB.
@@ -22,6 +24,7 @@ A hardened, multi-tenant orchestration platform for running PowerShell workloads
 - **Operational boundaries**: Only stored procedures mutate runtime tables (`job_runs`, `job_run_targets`, logs). Agents never write directly outside vetted RPCs.
 
 **Job Lifecycle**
+
 1. Operator uploads script & version, optionally attaching Authenticode signature metadata.
 2. Operator creates a job (targets + credentials + schedule) and activates it.
 3. Run queued manually, via schedule evaluator, or API. Stored proc materializes `job_runs` + `job_run_targets` in a single transaction.
@@ -1161,7 +1164,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA epo GRANT SELECT, INSERT, UPDATE ON TABLES TO
 ALTER DEFAULT PRIVILEGES IN SCHEMA epo GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_admin;
 ```
 
-```
+````
 
 ## 3) PostgREST Configuration
 
@@ -1169,7 +1172,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA epo GRANT SELECT, INSERT, UPDATE, DELETE ON T
 
 ```conf
 # Database connection
-db-uri = "postgres://postgrest_rest:CHANGE_ME@127.0.0.1:5432/epo"
+db-uri = "postgres://postgrest_rest:CHANGE_ME@127.0.0.1:5435/epo"
 
 # JWT settings (HS512 recommended)
 jwt-secret = "replace-with-128-hex"
@@ -1186,7 +1189,7 @@ server-port = 3001
 
 db-pool = 10
 pre-request = "epo.request_claims"  # ensures claims are parsed even for app_anon
-```
+````
 
 > Enable `db-pre-request` only after the helper function exists. In production, supply `jwt-secret` via env var (`PGRST_JWT_SECRET`).
 
@@ -1197,6 +1200,7 @@ Purpose: authenticate operators (local + LDAP), issue short-lived JWTs, manage a
 > Folder: `auth-gateway/`
 
 ### 4.1 `package.json`
+
 ```json
 {
   "name": "epo-auth-gateway",
@@ -1223,9 +1227,10 @@ Purpose: authenticate operators (local + LDAP), issue short-lived JWTs, manage a
 ```
 
 ### 4.2 Environment file (`.env.example`)
+
 ```env
 PORT=4000
-PG_URI=postgres://postgrest_rest:CHANGE_ME@127.0.0.1:5432/epo
+PG_URI=postgres://postgrest_rest:CHANGE_ME@127.0.0.1:5435/epo
 JWT_SECRET=generate-128-byte-hex
 JWT_AUDIENCE=epo
 JWT_ISSUER=epo-auth-gateway
@@ -1240,19 +1245,20 @@ AGENT_TOKEN_TTL=300s
 ```
 
 ### 4.3 `src/index.js`
-```js
-import express from 'express';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-import argon2 from 'argon2';
-import jwt from 'jsonwebtoken';
-import { Pool } from 'pg';
-import { LdapAuth } from 'fast-ldap-auth';
-import pino from 'pino';
-import { z } from 'zod';
 
-dotenv.config();
+```js
+import express from 'express'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
+import dotenv from 'dotenv'
+import argon2 from 'argon2'
+import jwt from 'jsonwebtoken'
+import { Pool } from 'pg'
+import { LdapAuth } from 'fast-ldap-auth'
+import pino from 'pino'
+import { z } from 'zod'
+
+dotenv.config()
 
 const configSchema = z.object({
   PORT: z.coerce.number().default(4000),
@@ -1267,12 +1273,12 @@ const configSchema = z.object({
   LDAP_BIND_PW: z.string().optional(),
   LDAP_SEARCH_BASE: z.string().optional(),
   LDAP_USERNAME_ATTRIBUTE: z.string().default('sAMAccountName')
-});
+})
 
-const env = configSchema.parse(process.env);
-const log = pino({ level: process.env.LOG_LEVEL ?? 'info' });
+const env = configSchema.parse(process.env)
+const log = pino({ level: process.env.LOG_LEVEL ?? 'info' })
 
-const pool = new Pool({ connectionString: env.PG_URI });
+const pool = new Pool({ connectionString: env.PG_URI })
 
 const ldap = env.LDAP_URL
   ? new LdapAuth({
@@ -1283,42 +1289,44 @@ const ldap = env.LDAP_URL
       searchFilter: `(${env.LDAP_USERNAME_ATTRIBUTE}={{username}})`,
       tlsOptions: { rejectUnauthorized: true }
     })
-  : null;
+  : null
 if (ldap) {
-  ldap.on('error', (err) => log.error({ err }, 'LDAP error'));
+  ldap.on('error', err => log.error({ err }, 'LDAP error'))
 }
 
-const app = express();
-app.disable('x-powered-by');
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json({ limit: '1mb' }));
-app.use(rateLimit({
-  windowMs: 60_000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false
-}));
+const app = express()
+app.disable('x-powered-by')
+app.use(helmet({ contentSecurityPolicy: false }))
+app.use(express.json({ limit: '1mb' }))
+app.use(
+  rateLimit({
+    windowMs: 60_000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false
+  })
+)
 
 const authBodySchema = z.object({
   tenant: z.string().min(1),
   username: z.string().min(1),
   password: z.string().min(1)
-});
+})
 
 const agentRegistrationSchema = z.object({
   name: z.string().min(3),
   publicKeyPem: z.string().min(1),
   version: z.string().optional()
-});
+})
 
 function mapRoles(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
+  if (!value) return []
+  if (Array.isArray(value)) return value
   return value
     .replace(/[{}]/g, '')
     .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+    .map(s => s.trim())
+    .filter(Boolean)
 }
 
 async function loadUser(tenantSlug, username) {
@@ -1335,13 +1343,13 @@ async function loadUser(tenantSlug, username) {
  LEFT JOIN epo.user_roles r ON r.user_id = u.id
      WHERE t.slug = $1 AND u.username = $2
   GROUP BY u.id, t.slug;
-  `;
-  const { rows } = await pool.query(sql, [tenantSlug, username]);
-  return rows[0] ? { ...rows[0], app_roles: mapRoles(rows[0].app_roles) } : null;
+  `
+  const { rows } = await pool.query(sql, [tenantSlug, username])
+  return rows[0] ? { ...rows[0], app_roles: mapRoles(rows[0].app_roles) } : null
 }
 
 function highestDbRole(appRoles = []) {
-  return appRoles.includes('admin') ? 'app_admin' : 'app_user';
+  return appRoles.includes('admin') ? 'app_admin' : 'app_user'
 }
 
 function issueAccessToken(user, overrides = {}) {
@@ -1354,177 +1362,191 @@ function issueAccessToken(user, overrides = {}) {
     iss: env.JWT_ISSUER,
     aud: env.JWT_AUDIENCE,
     ...overrides
-  };
+  }
   return jwt.sign(payload, env.JWT_SECRET, {
     algorithm: 'HS512',
     expiresIn: overrides.expiresIn ?? env.ACCESS_TOKEN_TTL
-  });
+  })
 }
 
 function authenticate(req, res, next) {
-  const auth = req.headers.authorization;
+  const auth = req.headers.authorization
   if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'missing_auth' });
+    return res.status(401).json({ error: 'missing_auth' })
   }
-  const token = auth.substring(7);
+  const token = auth.substring(7)
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET, {
       algorithms: ['HS512'],
       audience: env.JWT_AUDIENCE,
       issuer: env.JWT_ISSUER
-    });
-    req.jwt = decoded;
-    next();
+    })
+    req.jwt = decoded
+    next()
   } catch {
-    return res.status(401).json({ error: 'invalid_token' });
+    return res.status(401).json({ error: 'invalid_token' })
   }
 }
 
 function requireAdmin(req, res, next) {
-  const roles = Array.isArray(req.jwt?.app_roles) ? req.jwt.app_roles : [];
+  const roles = Array.isArray(req.jwt?.app_roles) ? req.jwt.app_roles : []
   if (!roles.includes('admin')) {
-    return res.status(403).json({ error: 'admin_only' });
+    return res.status(403).json({ error: 'admin_only' })
   }
-  next();
+  next()
 }
 ```
 
 ```js
 function issueAgentToken(agentId, tenantId, tenantSlug) {
-  return jwt.sign({
-    sub: agentId,
-    agent_id: agentId,
-    tenant_id: tenantId,
-    tenant_slug: tenantSlug,
-    role: 'app_agent',
-    iss: env.JWT_ISSUER,
-    aud: env.JWT_AUDIENCE
-  }, env.JWT_SECRET, {
-    algorithm: 'HS512',
-    expiresIn: env.AGENT_TOKEN_TTL
-  });
+  return jwt.sign(
+    {
+      sub: agentId,
+      agent_id: agentId,
+      tenant_id: tenantId,
+      tenant_slug: tenantSlug,
+      role: 'app_agent',
+      iss: env.JWT_ISSUER,
+      aud: env.JWT_AUDIENCE
+    },
+    env.JWT_SECRET,
+    {
+      algorithm: 'HS512',
+      expiresIn: env.AGENT_TOKEN_TTL
+    }
+  )
 }
 
-app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', (_req, res) => res.json({ ok: true }))
 
 app.post('/auth/local', async (req, res) => {
-  const parsed = authBodySchema.safeParse(req.body);
+  const parsed = authBodySchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ error: 'invalid_body', details: parsed.error.flatten() });
+    return res
+      .status(400)
+      .json({ error: 'invalid_body', details: parsed.error.flatten() })
   }
-  const { tenant, username, password } = parsed.data;
+  const { tenant, username, password } = parsed.data
   try {
-    const user = await loadUser(tenant.toLowerCase(), username);
+    const user = await loadUser(tenant.toLowerCase(), username)
     if (!user || user.auth_provider !== 'local' || !user.password_hash) {
-      return res.status(401).json({ error: 'invalid_credentials' });
+      return res.status(401).json({ error: 'invalid_credentials' })
     }
     if (!user.is_active) {
-      return res.status(403).json({ error: 'user_disabled' });
+      return res.status(403).json({ error: 'user_disabled' })
     }
-    const ok = await argon2.verify(user.password_hash, password);
+    const ok = await argon2.verify(user.password_hash, password)
     if (!ok) {
-      return res.status(401).json({ error: 'invalid_credentials' });
+      return res.status(401).json({ error: 'invalid_credentials' })
     }
-    const token = issueAccessToken(user);
-    res.json({ token, expires_in: env.ACCESS_TOKEN_TTL, roles: user.app_roles });
+    const token = issueAccessToken(user)
+    res.json({ token, expires_in: env.ACCESS_TOKEN_TTL, roles: user.app_roles })
   } catch (err) {
-    log.error({ err }, 'local auth failure');
-    res.status(500).json({ error: 'server_error' });
+    log.error({ err }, 'local auth failure')
+    res.status(500).json({ error: 'server_error' })
   }
-});
+})
 
 app.post('/auth/ldap', async (req, res) => {
-  if (!ldap) return res.status(503).json({ error: 'ldap_not_configured' });
-  const parsed = authBodySchema.safeParse(req.body);
+  if (!ldap) return res.status(503).json({ error: 'ldap_not_configured' })
+  const parsed = authBodySchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ error: 'invalid_body', details: parsed.error.flatten() });
+    return res
+      .status(400)
+      .json({ error: 'invalid_body', details: parsed.error.flatten() })
   }
-  const { tenant, username, password } = parsed.data;
+  const { tenant, username, password } = parsed.data
   try {
-    await ldap.authenticate({ username, password });
-    const user = await loadUser(tenant.toLowerCase(), username);
+    await ldap.authenticate({ username, password })
+    const user = await loadUser(tenant.toLowerCase(), username)
     if (!user || user.auth_provider !== 'ldap') {
-      return res.status(403).json({ error: 'user_not_provisioned' });
+      return res.status(403).json({ error: 'user_not_provisioned' })
     }
     if (!user.is_active) {
-      return res.status(403).json({ error: 'user_disabled' });
+      return res.status(403).json({ error: 'user_disabled' })
     }
-    const token = issueAccessToken(user);
-    res.json({ token, expires_in: env.ACCESS_TOKEN_TTL, roles: user.app_roles });
+    const token = issueAccessToken(user)
+    res.json({ token, expires_in: env.ACCESS_TOKEN_TTL, roles: user.app_roles })
   } catch (err) {
-    log.warn({ err }, 'ldap auth failure');
-    res.status(401).json({ error: 'invalid_credentials' });
+    log.warn({ err }, 'ldap auth failure')
+    res.status(401).json({ error: 'invalid_credentials' })
   }
-});
+})
 
 app.get('/crypto/agent-keys', authenticate, async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id, name, public_key_pem FROM epo.agents WHERE tenant_id = $1 ORDER BY name',
       [req.jwt.tenant_id]
-    );
-    res.json(rows);
+    )
+    res.json(rows)
   } catch (err) {
-    log.error({ err }, 'list agent keys failed');
-    res.status(500).json({ error: 'server_error' });
+    log.error({ err }, 'list agent keys failed')
+    res.status(500).json({ error: 'server_error' })
   }
-});
+})
 
 app.post('/agents', authenticate, requireAdmin, async (req, res) => {
-  const parsed = agentRegistrationSchema.safeParse(req.body);
+  const parsed = agentRegistrationSchema.safeParse(req.body)
   if (!parsed.success) {
-    return res.status(400).json({ error: 'invalid_body', details: parsed.error.flatten() });
+    return res
+      .status(400)
+      .json({ error: 'invalid_body', details: parsed.error.flatten() })
   }
-  const { name, publicKeyPem, version } = parsed.data;
+  const { name, publicKeyPem, version } = parsed.data
   try {
     const result = await pool.query(
       'SELECT epo.sp_register_agent($1,$2,$3) AS id',
       [name, publicKeyPem, version ?? null]
-    );
-    res.status(201).json({ id: result.rows[0].id });
+    )
+    res.status(201).json({ id: result.rows[0].id })
   } catch (err) {
-    log.error({ err }, 'agent registration failed');
-    res.status(500).json({ error: 'server_error' });
+    log.error({ err }, 'agent registration failed')
+    res.status(500).json({ error: 'server_error' })
   }
-});
+})
 
 app.post('/agents/:id/token', authenticate, requireAdmin, async (req, res) => {
-  const agentId = req.params.id;
+  const agentId = req.params.id
   try {
     const { rows } = await pool.query(
       'SELECT id, tenant_id FROM epo.agents WHERE id = $1 AND tenant_id = $2',
       [agentId, req.jwt.tenant_id]
-    );
+    )
     if (!rows.length) {
-      return res.status(404).json({ error: 'agent_not_found' });
+      return res.status(404).json({ error: 'agent_not_found' })
     }
-    const token = issueAgentToken(agentId, req.jwt.tenant_id, req.jwt.tenant_slug);
-    res.json({ token, expires_in: env.AGENT_TOKEN_TTL });
+    const token = issueAgentToken(
+      agentId,
+      req.jwt.tenant_id,
+      req.jwt.tenant_slug
+    )
+    res.json({ token, expires_in: env.AGENT_TOKEN_TTL })
   } catch (err) {
-    log.error({ err }, 'agent token issuance failed');
-    res.status(500).json({ error: 'server_error' });
+    log.error({ err }, 'agent token issuance failed')
+    res.status(500).json({ error: 'server_error' })
   }
-});
+})
 
 app.use((err, _req, res, _next) => {
-  log.error({ err }, 'unhandled error');
-  res.status(500).json({ error: 'server_error' });
-});
+  log.error({ err }, 'unhandled error')
+  res.status(500).json({ error: 'server_error' })
+})
 
 const server = app.listen(env.PORT, () => {
-  log.info({ port: env.PORT }, 'Auth Gateway listening');
-});
+  log.info({ port: env.PORT }, 'Auth Gateway listening')
+})
 
 async function shutdown(signal) {
-  log.info({ signal }, 'shutting down');
-  server.close(() => log.info('http server closed'));
-  await pool.end().catch((err) => log.error({ err }, 'pool close failed'));
-  if (ldap) ldap.close();
-  process.exit(0);
+  log.info({ signal }, 'shutting down')
+  server.close(() => log.info('http server closed'))
+  await pool.end().catch(err => log.error({ err }, 'pool close failed'))
+  if (ldap) ldap.close()
+  process.exit(0)
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
 ```
 
 > Hash all local passwords with Argon2id (`argon2.hash(password, { type: argon2.argon2id, timeCost: 3, memoryCost: 19456 })`). LDAP provision requires pre-creating the user with `auth_provider='ldap'` and `is_active=true`.
@@ -1536,6 +1558,7 @@ The agent is a PowerShell 7 service that polls PostgREST with a short-lived JWT,
 > Folder: `agent/`
 
 ### 5.1 `config.example.json`
+
 ```json
 {
   "TenantSlug": "corp",
@@ -1553,6 +1576,7 @@ The agent is a PowerShell 7 service that polls PostgREST with a short-lived JWT,
 `BootstrapToken` is the long-lived management token returned by `/agents/:id/token` (copy once into the agent host). The agent exchanges it for short-lived JWTs (`AGENT_TOKEN_TTL`).
 
 ### 5.2 `Install-Agent.ps1`
+
 ```powershell
 [CmdletBinding()] param(
   [Parameter(Mandatory)] [string]$AgentName,
@@ -1585,6 +1609,7 @@ try {
 > For environments where services are preferable, wrap the script with NSSM or the Windows Service Wrapper. The scheduled-task approach avoids extra dependencies and restarts automatically on failure.
 
 ### 5.3 `EpoAgent.ps1`
+
 ```powershell
 #requires -Version 7.4
 param(
@@ -1813,7 +1838,7 @@ function Invoke-Target($target, $scriptText) {
   if ($result.Output) { Write-RunLog -TargetId $target.id -Stream 'stdout' -Message $result.Output }
   if ($result.Errors) { Write-RunLog -TargetId $target.id -Stream 'stderr' -Message $result.Errors }
 
-  Invoke-EpoApi -Method Post -Path '/rpc/sp_update_job_target' -Body @{ 
+  Invoke-EpoApi -Method Post -Path '/rpc/sp_update_job_target' -Body @{
     p_job_run_id = $target.job_run_id;
     p_server_id = $target.server_id;
     p_status = $result.Status;
@@ -1845,7 +1870,7 @@ function Process-Run([guid]$RunId) {
     } catch {
       $failures++
       Write-RunLog -TargetId $t.id -Stream 'stderr' -Message $_.Exception.Message
-      Invoke-EpoApi -Method Post -Path '/rpc/sp_update_job_target' -Body @{ 
+      Invoke-EpoApi -Method Post -Path '/rpc/sp_update_job_target' -Body @{
         p_job_run_id = $t.job_run_id;
         p_server_id = $t.server_id;
         p_status = 'failed';
@@ -1898,12 +1923,12 @@ while ($true) {
 
 > The agent expects scripts to declare parameters (`param()`) when remote execution needs arguments; `target.parameters` are injected as named parameters for local runs. Extend `Invoke-RemoteScript` to leverage WinRM JEA or SSH per your environment.
 
-
 ## 6) React Frontend (Vite + TypeScript)
 
 > Folder: `frontend/`
 
 ### 6.1 `package.json`
+
 ```json
 {
   "name": "epo-frontend",
@@ -1932,131 +1957,159 @@ while ($true) {
 ```
 
 ### 6.2 `src/lib/api.ts`
+
 ```ts
-import axios from 'axios';
+import axios from 'axios'
 
-const AUTH_URL = import.meta.env.VITE_AUTH_URL ?? 'http://localhost:4000';
-const REST_URL = import.meta.env.VITE_POSTGREST_URL ?? 'http://localhost:3001';
+const AUTH_URL = import.meta.env.VITE_AUTH_URL ?? 'http://localhost:4000'
+const REST_URL = import.meta.env.VITE_POSTGREST_URL ?? 'http://localhost:3001'
 
-const api = axios.create({ baseURL: REST_URL, timeout: 10000 });
-let accessToken = sessionStorage.getItem('epo_access_token') ?? '';
+const api = axios.create({ baseURL: REST_URL, timeout: 10000 })
+let accessToken = sessionStorage.getItem('epo_access_token') ?? ''
 
 export function setAccessToken(token: string | null) {
-  accessToken = token ?? '';
+  accessToken = token ?? ''
   if (token) {
-    sessionStorage.setItem('epo_access_token', token);
+    sessionStorage.setItem('epo_access_token', token)
   } else {
-    sessionStorage.removeItem('epo_access_token');
+    sessionStorage.removeItem('epo_access_token')
   }
 }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(config => {
   if (accessToken) {
-    config.headers = config.headers ?? {};
-    config.headers.Authorization = `Bearer ${accessToken}`;
+    config.headers = config.headers ?? {}
+    config.headers.Authorization = `Bearer ${accessToken}`
   }
-  return config;
-});
+  return config
+})
 
-export async function loginLocal(tenant: string, username: string, password: string) {
-  const { data } = await axios.post(`${AUTH_URL}/auth/local`, { tenant, username, password });
-  setAccessToken(data.token);
-  return data;
+export async function loginLocal(
+  tenant: string,
+  username: string,
+  password: string
+) {
+  const { data } = await axios.post(`${AUTH_URL}/auth/local`, {
+    tenant,
+    username,
+    password
+  })
+  setAccessToken(data.token)
+  return data
 }
 
-export async function loginLdap(tenant: string, username: string, password: string) {
-  const { data } = await axios.post(`${AUTH_URL}/auth/ldap`, { tenant, username, password });
-  setAccessToken(data.token);
-  return data;
+export async function loginLdap(
+  tenant: string,
+  username: string,
+  password: string
+) {
+  const { data } = await axios.post(`${AUTH_URL}/auth/ldap`, {
+    tenant,
+    username,
+    password
+  })
+  setAccessToken(data.token)
+  return data
 }
 
 export function logout() {
-  setAccessToken(null);
+  setAccessToken(null)
 }
 
-export { api };
+export { api }
 ```
 
 ### 6.3 `src/context/AuthContext.tsx`
+
 ```tsx
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import { setAccessToken, logout as apiLogout } from '../lib/api';
+import React, { createContext, useContext, useMemo, useState } from 'react'
+import { setAccessToken, logout as apiLogout } from '../lib/api'
 
 type Claims = {
-  sub: string;
-  tenant_slug: string;
-  app_roles?: string[];
-  exp: number;
-};
+  sub: string
+  tenant_slug: string
+  app_roles?: string[]
+  exp: number
+}
 
 type AuthState = {
-  token: string | null;
-  claims: Claims | null;
-  login: (token: string) => void;
-  logout: () => void;
-};
+  token: string | null
+  claims: Claims | null
+  login: (token: string) => void
+  logout: () => void
+}
 
-const AuthContext = createContext<AuthState | undefined>(undefined);
+const AuthContext = createContext<AuthState | undefined>(undefined)
 
 function decodeClaims(token: string): Claims | null {
   try {
-    const [, payload] = token.split('.');
-    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(json);
+    const [, payload] = token.split('.')
+    const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+    return JSON.parse(json)
   } catch {
-    return null;
+    return null
   }
 }
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem('epo_access_token'));
-  const [claims, setClaims] = useState<Claims | null>(() => (token ? decodeClaims(token) : null));
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children
+}) => {
+  const [token, setToken] = useState<string | null>(() =>
+    sessionStorage.getItem('epo_access_token')
+  )
+  const [claims, setClaims] = useState<Claims | null>(() =>
+    token ? decodeClaims(token) : null
+  )
 
   const login = (nextToken: string) => {
-    setAccessToken(nextToken);
-    setToken(nextToken);
-    setClaims(decodeClaims(nextToken));
-  };
+    setAccessToken(nextToken)
+    setToken(nextToken)
+    setClaims(decodeClaims(nextToken))
+  }
 
   const logout = () => {
-    apiLogout();
-    setToken(null);
-    setClaims(null);
-  };
+    apiLogout()
+    setToken(null)
+    setClaims(null)
+  }
 
-  const value = useMemo(() => ({ token, claims, login, logout }), [token, claims]);
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+  const value = useMemo(
+    () => ({ token, claims, login, logout }),
+    [token, claims]
+  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('Auth context missing');
-  return ctx;
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('Auth context missing')
+  return ctx
 }
 ```
 
 ### 6.4 `src/main.tsx`
+
 ```tsx
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Scripts from './pages/Scripts';
-import Jobs from './pages/Jobs';
-import Credentials from './pages/Credentials';
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+import Scripts from './pages/Scripts'
+import Jobs from './pages/Jobs'
+import Credentials from './pages/Credentials'
 
 function RequireAuth({ children }: { children: JSX.Element }) {
-  const { token, claims } = useAuth();
+  const { token, claims } = useAuth()
   if (!token || !claims) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to='/login' replace />
   }
-  const now = Date.now() / 1000;
+  const now = Date.now() / 1000
   if (claims.exp && claims.exp < now) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to='/login' replace />
   }
-  return children;
+  return children
 }
 
 createRoot(document.getElementById('root')!).render(
@@ -2064,78 +2117,148 @@ createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-          <Route path="/scripts" element={<RequireAuth><Scripts /></RequireAuth>} />
-          <Route path="/jobs" element={<RequireAuth><Jobs /></RequireAuth>} />
-          <Route path="/credentials" element={<RequireAuth><Credentials /></RequireAuth>} />
+          <Route path='/login' element={<Login />} />
+          <Route
+            path='/'
+            element={
+              <RequireAuth>
+                <Dashboard />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path='/scripts'
+            element={
+              <RequireAuth>
+                <Scripts />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path='/jobs'
+            element={
+              <RequireAuth>
+                <Jobs />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path='/credentials'
+            element={
+              <RequireAuth>
+                <Credentials />
+              </RequireAuth>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
   </React.StrictMode>
-);
+)
 ```
 
 ### 6.5 `src/pages/Login.tsx`
+
 ```tsx
-import React, { useState } from 'react';
-import { loginLocal, loginLdap } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import React, { useState } from 'react'
+import { loginLocal, loginLdap } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { login } = useAuth();
-  const [mode, setMode] = useState<'local' | 'ldap'>('local');
-  const [tenant, setTenant] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
+  const { login } = useAuth()
+  const [mode, setMode] = useState<'local' | 'ldap'>('local')
+  const [tenant, setTenant] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [status, setStatus] = useState<string | null>(null)
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setStatus(null);
+    e.preventDefault()
+    setStatus(null)
     try {
-      const fn = mode === 'local' ? loginLocal : loginLdap;
-      const { token } = await fn(tenant, username, password);
-      if (!token) throw new Error('No token returned');
-      login(token);
-      window.location.href = '/';
+      const fn = mode === 'local' ? loginLocal : loginLdap
+      const { token } = await fn(tenant, username, password)
+      if (!token) throw new Error('No token returned')
+      login(token)
+      window.location.href = '/'
     } catch (err) {
-      console.error(err);
-      setStatus('Authentication failed');
+      console.error(err)
+      setStatus('Authentication failed')
     }
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: '10% auto', fontFamily: 'Inter, system-ui' }}>
+    <div
+      style={{
+        maxWidth: 420,
+        margin: '10% auto',
+        fontFamily: 'Inter, system-ui'
+      }}
+    >
       <h1>EPO Login</h1>
       <div style={{ marginBottom: 12 }}>
-        <button type="button" onClick={() => setMode('local')} disabled={mode === 'local'}>Local</button>
-        <button type="button" onClick={() => setMode('ldap')} disabled={mode === 'ldap'}>LDAP</button>
+        <button
+          type='button'
+          onClick={() => setMode('local')}
+          disabled={mode === 'local'}
+        >
+          Local
+        </button>
+        <button
+          type='button'
+          onClick={() => setMode('ldap')}
+          disabled={mode === 'ldap'}
+        >
+          LDAP
+        </button>
       </div>
       <form onSubmit={submit}>
-        <input placeholder="tenant" value={tenant} onChange={(e) => setTenant(e.target.value)} required />
-        <input placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
-        <input placeholder="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <input
+          placeholder='tenant'
+          value={tenant}
+          onChange={e => setTenant(e.target.value)}
+          required
+        />
+        <input
+          placeholder='username'
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          required
+        />
+        <input
+          placeholder='password'
+          type='password'
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          required
+        />
         <div style={{ marginTop: 12 }}>
-          <button type="submit">Sign In</button>
+          <button type='submit'>Sign In</button>
         </div>
       </form>
       {status && <p style={{ color: 'crimson' }}>{status}</p>}
     </div>
-  );
+  )
 }
 ```
 
 ### 6.6 `src/pages/Dashboard.tsx`
+
 ```tsx
-import React from 'react';
-import { useAuth } from '../context/AuthContext';
+import React from 'react'
+import { useAuth } from '../context/AuthContext'
 
 export default function Dashboard() {
-  const { claims, logout } = useAuth();
+  const { claims, logout } = useAuth()
   return (
     <div style={{ padding: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}
+      >
         <div>
           <h2>Enterprise PowerShell Orchestrator</h2>
           <p>Tenant: {claims?.tenant_slug}</p>
@@ -2151,48 +2274,58 @@ export default function Dashboard() {
         </ul>
       </section>
     </div>
-  );
+  )
 }
 ```
 
 ### 6.7 `src/pages/Scripts.tsx`
+
 ```tsx
-import React, { useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import React, { useEffect, useState } from 'react'
+import { api } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 
 function bytesToHex(bytes: Uint8Array) {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 export default function Scripts() {
-  const { claims } = useAuth();
-  const [scripts, setScripts] = useState<any[]>([]);
-  const [name, setName] = useState('');
-  const [content, setContent] = useState('');
-  const [visibility, setVisibility] = useState<'private' | 'tenant'>('private');
-  const [status, setStatus] = useState<string | null>(null);
+  const { claims } = useAuth()
+  const [scripts, setScripts] = useState<any[]>([])
+  const [name, setName] = useState('')
+  const [content, setContent] = useState('')
+  const [visibility, setVisibility] = useState<'private' | 'tenant'>('private')
+  const [status, setStatus] = useState<string | null>(null)
 
   async function load() {
-    const { data } = await api.get('/epo.scripts?select=id,name,visibility,created_at');
-    setScripts(data);
+    const { data } = await api.get(
+      '/epo.scripts?select=id,name,visibility,created_at'
+    )
+    setScripts(data)
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load()
+  }, [])
 
   async function createScript() {
-    if (!claims) return;
+    if (!claims) return
     try {
-      setStatus(null);
+      setStatus(null)
       const scriptRes = await api.post('/epo.scripts', {
         tenant_id: claims.tenant_id,
         name,
         visibility,
         created_by: claims.sub
-      });
-      const encoder = new TextEncoder();
-      const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(content));
-      const hex = bytesToHex(new Uint8Array(hashBuffer));
+      })
+      const encoder = new TextEncoder()
+      const hashBuffer = await crypto.subtle.digest(
+        'SHA-256',
+        encoder.encode(content)
+      )
+      const hex = bytesToHex(new Uint8Array(hashBuffer))
       await api.post('/epo.script_versions', {
         script_id: scriptRes.data.id,
         version: 1,
@@ -2200,14 +2333,14 @@ export default function Scripts() {
         content_sha256: `\\x${hex}`,
         is_signed: false,
         released_by: claims.sub
-      });
-      setName('');
-      setContent('');
-      await load();
-      setStatus('Script created');
+      })
+      setName('')
+      setContent('')
+      await load()
+      setStatus('Script created')
     } catch (err) {
-      console.error(err);
-      setStatus('Create failed');
+      console.error(err)
+      setStatus('Create failed')
     }
   }
 
@@ -2215,85 +2348,106 @@ export default function Scripts() {
     <div style={{ padding: 24 }}>
       <h2>Scripts</h2>
       <section>
-        <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-        <select value={visibility} onChange={(e) => setVisibility(e.target.value as any)}>
-          <option value="private">Private</option>
-          <option value="tenant">Tenant</option>
+        <input
+          placeholder='Name'
+          value={name}
+          onChange={e => setName(e.target.value)}
+        />
+        <select
+          value={visibility}
+          onChange={e => setVisibility(e.target.value as any)}
+        >
+          <option value='private'>Private</option>
+          <option value='tenant'>Tenant</option>
         </select>
         <textarea
-          placeholder="PowerShell content"
+          placeholder='PowerShell content'
           value={content}
-          onChange={(e) => setContent(e.target.value)}
+          onChange={e => setContent(e.target.value)}
           rows={10}
           cols={80}
         />
         <div>
-          <button onClick={createScript} disabled={!name || !content}>Create Script + Version</button>
+          <button onClick={createScript} disabled={!name || !content}>
+            Create Script + Version
+          </button>
         </div>
         {status && <p>{status}</p>}
       </section>
       <hr />
       <ul>
-        {scripts.map((s) => (
-          <li key={s.id}>{s.name} ({s.visibility})</li>
+        {scripts.map(s => (
+          <li key={s.id}>
+            {s.name} ({s.visibility})
+          </li>
         ))}
       </ul>
     </div>
-  );
+  )
 }
 ```
 
-
 ### 6.8 `src/pages/Credentials.tsx`
-```tsx
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { api, AUTH_URL } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
 
-type AgentKey = { id: string; name: string; public_key_pem: string };
+```tsx
+import React, { useEffect, useState } from 'react'
+import axios from 'axios'
+import { api, AUTH_URL } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
+
+type AgentKey = { id: string; name: string; public_key_pem: string }
 
 async function importAgentKey(pem: string) {
-  const clean = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
-  const buf = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+  const clean = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')
+  const buf = Uint8Array.from(atob(clean), c => c.charCodeAt(0))
   return crypto.subtle.importKey(
     'spki',
     buf,
     { name: 'RSA-OAEP', hash: 'SHA-256' },
     false,
     ['encrypt']
-  );
+  )
 }
 
 function bytesToHex(bytes: Uint8Array) {
-  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 export default function Credentials() {
-  const { claims, token } = useAuth();
-  const [agents, setAgents] = useState<AgentKey[]>([]);
-  const [agent, setAgent] = useState<AgentKey | null>(null);
-  const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
+  const { claims, token } = useAuth()
+  const [agents, setAgents] = useState<AgentKey[]>([])
+  const [agent, setAgent] = useState<AgentKey | null>(null)
+  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [status, setStatus] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      if (!token) return;
+      if (!token) return
       const { data } = await axios.get(`${AUTH_URL}/crypto/agent-keys`, {
         headers: { Authorization: `Bearer ${token}` }
-      });
-      setAgents(data);
+      })
+      setAgents(data)
     }
-    void load();
-  }, [token]);
+    void load()
+  }, [token])
 
   async function save() {
-    if (!claims || !agent) { return; }
+    if (!claims || !agent) {
+      return
+    }
     try {
-      const key = await importAgentKey(agent.public_key_pem);
-      const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, key, new TextEncoder().encode(password)));
+      const key = await importAgentKey(agent.public_key_pem)
+      const cipher = new Uint8Array(
+        await crypto.subtle.encrypt(
+          { name: 'RSA-OAEP' },
+          key,
+          new TextEncoder().encode(password)
+        )
+      )
       await api.post('/epo.credentials', {
         tenant_id: claims.tenant_id,
         name,
@@ -2302,12 +2456,12 @@ export default function Credentials() {
         algorithm: 'rsa-oaep-sha256',
         pubkey_fingerprint: agent.id,
         created_by: claims.sub
-      });
-      setStatus('Credential saved');
-      setPassword('');
+      })
+      setStatus('Credential saved')
+      setPassword('')
     } catch (err) {
-      console.error(err);
-      setStatus('Save failed');
+      console.error(err)
+      setStatus('Save failed')
     }
   }
 
@@ -2316,67 +2470,104 @@ export default function Credentials() {
       <h2>Credentials</h2>
       <div>
         <label>Encrypt for agent: </label>
-        <select value={agent?.id ?? ''} onChange={(e) => setAgent(agents.find((a) => a.id === e.target.value) ?? null)}>
-          <option value="">-- select agent --</option>
-          {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        <select
+          value={agent?.id ?? ''}
+          onChange={e =>
+            setAgent(agents.find(a => a.id === e.target.value) ?? null)
+          }
+        >
+          <option value=''>-- select agent --</option>
+          {agents.map(a => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
         </select>
       </div>
       <div style={{ display: 'grid', gap: 8, maxWidth: 360, marginTop: 16 }}>
-        <input placeholder="Credential name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
-        <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button onClick={save} disabled={!name || !username || !password || !agent}>Save</button>
+        <input
+          placeholder='Credential name'
+          value={name}
+          onChange={e => setName(e.target.value)}
+        />
+        <input
+          placeholder='Username'
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+        />
+        <input
+          placeholder='Password'
+          type='password'
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+        />
+        <button
+          onClick={save}
+          disabled={!name || !username || !password || !agent}
+        >
+          Save
+        </button>
       </div>
       {status && <p>{status}</p>}
     </div>
-  );
+  )
 }
 ```
 
 ### 6.9 `src/pages/Jobs.tsx`
+
 ```tsx
-import React, { useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import React, { useEffect, useState } from 'react'
+import { api } from '../lib/api'
+import { useAuth } from '../context/AuthContext'
 
 export default function Jobs() {
-  const { claims } = useAuth();
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [selected, setSelected] = useState<string>('');
-  const [status, setStatus] = useState<string | null>(null);
+  const { claims } = useAuth()
+  const [jobs, setJobs] = useState<any[]>([])
+  const [selected, setSelected] = useState<string>('')
+  const [status, setStatus] = useState<string | null>(null)
 
   async function load() {
-    const { data } = await api.get('/epo.jobs?select=id,name,status');
-    setJobs(data);
+    const { data } = await api.get('/epo.jobs?select=id,name,status')
+    setJobs(data)
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load()
+  }, [])
 
   async function enqueue() {
-    if (!selected) return;
+    if (!selected) return
     try {
-      setStatus(null);
-      await api.post('/rpc/sp_enqueue_job', { p_job_id: selected, p_trigger: 'manual' });
-      setStatus('Run queued');
+      setStatus(null)
+      await api.post('/rpc/sp_enqueue_job', {
+        p_job_id: selected,
+        p_trigger: 'manual'
+      })
+      setStatus('Run queued')
     } catch (err) {
-      console.error(err);
-      setStatus('Queue failed');
+      console.error(err)
+      setStatus('Queue failed')
     }
   }
 
   return (
     <div style={{ padding: 24 }}>
       <h2>Jobs</h2>
-      <select value={selected} onChange={(e) => setSelected(e.target.value)}>
-        <option value="">-- select job --</option>
-        {jobs.map((job) => (
-          <option key={job.id} value={job.id}>{job.name} ({job.status})</option>
+      <select value={selected} onChange={e => setSelected(e.target.value)}>
+        <option value=''>-- select job --</option>
+        {jobs.map(job => (
+          <option key={job.id} value={job.id}>
+            {job.name} ({job.status})
+          </option>
         ))}
       </select>
-      <button onClick={enqueue} disabled={!selected || !claims}>Run Now</button>
+      <button onClick={enqueue} disabled={!selected || !claims}>
+        Run Now
+      </button>
       {status && <p>{status}</p>}
     </div>
-  );
+  )
 }
 ```
 
@@ -2385,6 +2576,7 @@ export default function Jobs() {
 > Folder: `infra/`
 
 ### 7.1 `bootstrap.ps1`
+
 ```powershell
 [CmdletBinding()] param(
   [Parameter(Mandatory)] [string]$PgUri,
@@ -2403,7 +2595,7 @@ $uri = [System.Uri]$PgUri
 $pgPassword = ($uri.UserInfo.Split(':')[1])
 $pgUser = $uri.UserInfo.Split(':')[0]
 $pgHost = $uri.Host
-$pgPort = if ($uri.Port -gt 0) { $uri.Port } else { 5432 }
+$pgPort = if ($uri.Port -gt 0) { $uri.Port } else { 5435 }
 $pgDb = $uri.AbsolutePath.TrimStart('/')
 
 $env:PGPASSWORD = $pgPassword
@@ -2479,5 +2671,3 @@ Remove-Item Env:PGPASSWORD
 - Harden pipeline: IaC modules (Terraform/Ansible) for repeatable deployment, GitOps for script promotion, SBOM + dependency scanning.
 
 ---
-
-

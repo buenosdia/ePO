@@ -15,7 +15,7 @@ $uri = [System.Uri]$PgUri
 $pgPassword = ($uri.UserInfo.Split(':')[1])
 $pgUser = $uri.UserInfo.Split(':')[0]
 $pgHost = $uri.Host
-$pgPort = if ($uri.Port -gt 0) { $uri.Port } else { 5432 }
+$pgPort = if ($uri.Port -gt 0) { $uri.Port } else { 5435 }
 $pgDb = $uri.AbsolutePath.TrimStart('/')
 
 $env:PGPASSWORD = $pgPassword
@@ -61,7 +61,8 @@ ON CONFLICT (tenant_id, username) DO NOTHING;
 "@
   & psql @pgArgs -c $insertAdmin | Out-Null
   Write-Host 'Seeded default tenant + admin. Grant roles via SQL: INSERT INTO epo.user_roles ...'
-} else {
+}
+else {
   Write-Host 'Skipping admin seed (provide AdminUsername + Argon2 hash to seed).'
 }
 

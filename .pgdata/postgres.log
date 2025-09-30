@@ -1,0 +1,10 @@
+2025-09-24 18:27:15.091 EDT [3648] FATAL:  lock file "postmaster.pid" already exists
+2025-09-24 18:27:15.091 EDT [3648] HINT:  Is another postmaster (PID 79640) running in data directory "C:/Projects/EPO/.pgdata"?
+2025-09-24 18:27:33.973 EDT [84576] LOG:  starting PostgreSQL 17.6 on x86_64-windows, compiled by msvc-19.44.35213, 64-bit
+2025-09-24 18:27:33.981 EDT [84576] LOG:  listening on IPv6 address "::1", port 5544
+2025-09-24 18:27:33.981 EDT [84576] LOG:  listening on IPv4 address "127.0.0.1", port 5544
+2025-09-24 18:27:34.117 EDT [64420] LOG:  database system was shut down at 2025-09-24 18:27:30 EDT
+2025-09-24 18:27:34.219 EDT [84576] LOG:  database system is ready to accept connections
+2025-09-24 18:32:34.102 EDT [74504] LOG:  checkpoint starting: time
+2025-09-24 18:32:34.123 EDT [74504] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.004 s, total=0.023 s; sync files=2, longest=0.003 s, average=0.002 s; distance=0 kB, estimate=0 kB; lsn=0/15A2738, redo lsn=0/15A26E0
+2025-09-24 18:42:34.641 EDT [84576] LOG:  could not reserve shared memory region (addr=000002CE84F20000) for child 0000000000001694: error code 487
